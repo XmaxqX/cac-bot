@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>campus a college Claim-Bot</title>
+<style>
+  :root { --c:#8e445f; }
+  body { font: 16px/1.55 system-ui, -apple-system, Segoe UI, sans-serif; color:#222; background:#f6f3f4; margin:0; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 20px 60px; }
+  h1 { color: var(--c); margin: 0 0 4px; font-size: 28px; }
+  .sub { color:#666; margin:0 0 28px; }
+  .card { background:#fff; border-radius:12px; padding:20px 22px; margin:16px 0; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  h2 { font-size:18px; margin:0 0 10px; }
+  ol { padding-left: 20px; margin: 0; } li { margin: 6px 0; }
+  #bm { display:inline-block; background:var(--c); color:#fff; text-decoration:none; font-weight:700; padding:12px 20px; border-radius:10px; cursor:grab; font-size:17px; }
+  #bm.loading { opacity:.5; pointer-events:none; }
+  code, kbd { background:#f0e9ec; padding:1px 6px; border-radius:4px; font-size:14px; }
+  textarea { width:100%; height:70px; font:12px monospace; box-sizing:border-box; }
+  .m { color:#666; font-size:14px; }
+  button { background:#eee; border:0; border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>campus a college Claim-Bot</h1>
+  <p class="sub">Prüft jede Sekunde die Artikelverwaltung und claimt neue Texte nach deinen Regeln.</p>
+
+  <div class="card">
+    <h2>1 · Lesezeichen holen</h2>
+    <p>Zieh diesen Button in deine Lesezeichenleiste <span class="m">(Leiste einblenden: <kbd>Strg</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>)</span>:</p>
+    <p><a id="bm" class="loading" href="#">⚡ CAC Claim-Bot</a></p>
+    <details>
+      <summary class="m">Ziehen geht nicht? Manuell anlegen</summary>
+      <p class="m">Neues Lesezeichen anlegen, Name „CAC Claim-Bot“, und diesen Text als URL einfügen:</p>
+      <textarea id="code" readonly></textarea>
+      <button id="copy">Kopieren</button>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>2 · Pop-ups erlauben (einmalig)</h2>
+    <ol>
+      <li>Auf <a href="https://www.campus-a-college.at/artikel" target="_blank">campus-a-college.at</a> einloggen.</li>
+      <li>Links neben der Adresse auf das Symbol klicken → <b>Website-Einstellungen</b> → <b>Pop-ups und Weiterleitungen</b> → <b>Zulassen</b>.</li>
+    </ol>
+    <p class="m">Sonst kann der Bot geclaimte Texte nicht automatisch öffnen. Er claimt sie trotzdem und zeigt dir einen Link im Panel.</p>
+  </div>
+
+  <div class="card">
+    <h2>3 · Starten</h2>
+    <ol>
+      <li><b>Artikelverwaltung</b> öffnen, Filter <b>Ausstehend</b>.</li>
+      <li>Lesezeichen <b>⚡ CAC Claim-Bot</b> klicken → rechts unten erscheint das Panel.</li>
+      <li><b>Starten</b> klicken. Bei jedem Claim öffnet sich der Text, es piept und der Tab-Titel zeigt 🔔.</li>
+      <li>Text fertig? Tab schließen → der Bot holt den nächsten.</li>
+    </ol>
+    <p class="m">Den Artikel-Tab in einem <b>eigenen Fenster</b> offen lassen – in Hintergrund-Tabs bremst Chrome den Bot. Nach einem Neuladen der Seite das Lesezeichen nochmal klicken.</p>
+  </div>
+
+  <div class="card">
+    <h2>Regeln</h2>
+    <ul>
+      <li>Nur Texte ohne Schloss (niemand bearbeitet sie gerade).</li>
+      <li>Keine Goldstern-Autor:innen – das Profil wird vor jedem Claim geprüft, schon 1 Goldstern = überspringen.</li>
+      <li>Keine Schulkollegen – Standard: alle Texte der HTL Spengergasse; zusätzlich einzelne Namen sperrbar.</li>
+      <li>Standard: 1 Text gleichzeitig offen. Zähler pro Monat, Hinweis bei 100.</li>
+    </ul>
+    <p class="m">Alles im Panel unter „Einstellungen“ änderbar; wird im Browser gespeichert.</p>
+  </div>
+</main>
+<script>
+  fetch('bot.js', { cache: 'no-store' }).then(r => r.text()).then(src => {
+    const url = 'javascript:' + encodeURIComponent(src);
+    const bm = document.getElementById('bm');
+    bm.href = url; bm.classList.remove('loading');
+    bm.onclick = e => { e.preventDefault(); alert('Nicht hier klicken – in die Lesezeichenleiste ziehen und dann auf campus a college benutzen.'); };
+    document.getElementById('code').value = url;
+  });
+  document.getElementById('copy').onclick = () => {
+    const t = document.getElementById('code'); t.select(); navigator.clipboard.writeText(t.value);
+  };
+</script>
+</body>
+</html>
