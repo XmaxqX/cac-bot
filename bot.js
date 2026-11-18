@@ -13,7 +13,7 @@
 
   // ---------- Einstellungen & Zustand ----------
   const CFG_KEY = 'cacBotCfg', ST_KEY = 'cacBotState';
-  const DEF = { maxGoldstars: 0, blockedSchools: ['HTL Spengergasse'], blockedAuthors: [], maxOpen: 1, stopAt100: false };
+  const DEF = { maxGoldstars: 0, allowedVersions: [1, 3], blockedSchools: ['HTL Spengergasse'], blockedAuthors: [], maxOpen: 1, stopAt100: false };
   const load = (k, d) => { try { return Object.assign({}, d, JSON.parse(localStorage.getItem(k) || '{}')); } catch (_) { return { ...d }; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
   const month = () => new Date().toISOString().slice(0, 7);
@@ -37,8 +37,10 @@
   function rows() {
     return [...document.querySelectorAll('table tbody tr')].map((r) => {
       const c = r.cells, act = c[c.length - 1], au = c[5];
+      const ver = (c[0]?.innerText || '').match(/Version\s*(\d+)/i);
       return {
         title: (c[0]?.querySelector('a')?.textContent || '').trim(),
+        version: ver ? parseInt(ver[1], 10) : null,
         status: (c[4]?.innerText || '').trim(),
         author: (au?.querySelector('span.font-bold')?.textContent || '').trim(),
         profile: au?.querySelector('a[href^="/profil/"]')?.getAttribute('href') || null,
@@ -109,6 +111,7 @@
         if (!running || open.length >= cfg.maxOpen) break;
         if (cfg.stopAt100 && st.count >= 100) break;
         if (st.claimed.includes(a.edit)) continue;
+        if (!cfg.allowedVersions.includes(a.version)) continue;
         if (cfg.blockedSchools.some((s) => s && norm(a.school).includes(norm(s)))) continue;
         if (cfg.blockedAuthors.some((s) => s && norm(a.author) === norm(s))) continue;
         const g = await goldstars(a.profile);
@@ -138,7 +141,7 @@
 #cac-bot .go{background:#2e7d32;width:100%}#cac-bot .go.on{background:#b3261e}
 #cac-bot .x{background:none;color:#888;padding:0 4px}
 #cac-bot label{display:block;font-weight:600;margin:6px 0 2px}
-#cac-bot textarea,#cac-bot input[type=number]{width:100%;box-sizing:border-box;font:inherit}
+#cac-bot textarea,#cac-bot input[type=number],#cac-bot input[type=text]{width:100%;box-sizing:border-box;font:inherit}
 #cac-bot textarea{height:38px}
 #cac-bot .m{color:#666;font-size:11px}
 #cac-bot #cac-log{max-height:90px;overflow:auto;font-size:11px;margin-top:6px;border-top:1px solid #eee;padding-top:4px}
@@ -152,6 +155,7 @@
 <div id="cac-open"></div>
 <details><summary>Einstellungen</summary>
  <label>Max. Goldsterne der Autor:in</label><input type="number" id="cac-gold" min="0">
+ <label>Erlaubte Versionen (z. B. 1, 3)</label><input type="text" id="cac-vers">
  <label>Max. gleichzeitig offen</label><input type="number" id="cac-max" min="1">
  <label>Gesperrte Schulen (pro Zeile)</label><textarea id="cac-schools"></textarea>
  <label>Gesperrte Autor:innen (pro Zeile)</label><textarea id="cac-authors"></textarea>
@@ -186,6 +190,7 @@
   }
   function fill() {
     $('cac-gold').value = cfg.maxGoldstars; $('cac-max').value = cfg.maxOpen;
+    $('cac-vers').value = cfg.allowedVersions.join(', ');
     $('cac-schools').value = cfg.blockedSchools.join('\n'); $('cac-authors').value = cfg.blockedAuthors.join('\n');
     $('cac-100').checked = cfg.stopAt100;
   }
@@ -196,6 +201,7 @@
     cfg = {
       maxGoldstars: Math.max(0, parseInt($('cac-gold').value, 10) || 0),
       maxOpen: Math.max(1, parseInt($('cac-max').value, 10) || 1),
+      allowedVersions: ($('cac-vers').value.match(/\d+/g) || []).map(Number),
       blockedSchools: lines($('cac-schools').value),
       blockedAuthors: lines($('cac-authors').value),
       stopAt100: $('cac-100').checked,
