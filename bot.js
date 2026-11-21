@@ -13,19 +13,42 @@
 
   // ---------- Einstellungen & Zustand ----------
   const CFG_KEY = 'cacBotCfg', ST_KEY = 'cacBotState';
-  const DEF = { maxGoldstars: 0, allowedVersions: [1, 3], blockedSchools: ['HTL Spengergasse'], blockedAuthors: [], maxOpen: 1, stopAt100: false };
+  const DEF = {
+    v: 2, maxGoldstars: 0, allowedVersions: [1, 3, 5],
+    blockedSchools: ['HTL Spengergasse'], blockedAuthors: [],
+    // Honorar-Texte mit diesen Titeln nicht claimen (Teil-Treffer genügt)
+    blockedHonorarTitles: [
+      'IKB fragt dich: Wo würdest du in Innsbruck Solaranlagen bauen?',
+      'IKB fragt dich: Wohin mit dem Strom, wenn ihn gerade niemand',
+      'IKB fragt dich: Wer macht eigentlich unseren Strom?',
+      'IKB fragt dich: Ein Tag ohne Strom – und dann?',
+      'IKB fragt dich: Wie viel Wasserkraft braucht die Energiewende?',
+    ],
+    maxOpen: 1, stopAt100: false,
+  };
   const load = (k, d) => { try { return Object.assign({}, d, JSON.parse(localStorage.getItem(k) || '{}')); } catch (_) { return { ...d }; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
   const month = () => new Date().toISOString().slice(0, 7);
 
   let cfg = load(CFG_KEY, DEF);
+  // Migration alter gespeicherter Einstellungen: Version 5 + IKB-Sperre ergänzen
+  {
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); } catch (_) {}
+    if (stored && (stored.v || 1) < 2) {
+      cfg.allowedVersions = [...new Set([...(cfg.allowedVersions || []), 5])].sort((a, b) => a - b);
+      cfg.blockedHonorarTitles = DEF.blockedHonorarTitles.slice();
+      cfg.v = DEF.v;
+      save(CFG_KEY, cfg);
+    }
+  }
   let st = load(ST_KEY, { month: month(), count: 0, claimed: [], alerted100: false });
   if (st.month !== month()) st = { month: month(), count: 0, claimed: [], alerted100: false };
 
   let running = false, busy = false, timer = null;
   const open = [];               // { edit, title, win }
   const goldCache = new Map();
-  const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const norm = (s) => (s || '').toLowerCase().replace(/[–—‐-]/g, '-').replace(/\s+/g, ' ').trim();
 
   // ---------- Seite lesen ----------
   function component() {
@@ -41,6 +64,7 @@
       return {
         title: (c[0]?.querySelector('a')?.textContent || '').trim(),
         version: ver ? parseInt(ver[1], 10) : null,
+        type: (c[1]?.innerText || '').trim(),
         status: (c[4]?.innerText || '').trim(),
         author: (au?.querySelector('span.font-bold')?.textContent || '').trim(),
         profile: au?.querySelector('a[href^="/profil/"]')?.getAttribute('href') || null,
@@ -112,6 +136,7 @@
         if (cfg.stopAt100 && st.count >= 100) break;
         if (st.claimed.includes(a.edit)) continue;
         if (!cfg.allowedVersions.includes(a.version)) continue;
+        if (norm(a.type) === 'honorar' && cfg.blockedHonorarTitles.some((t) => t && norm(a.title).includes(norm(t)))) continue;
         if (cfg.blockedSchools.some((s) => s && norm(a.school).includes(norm(s)))) continue;
         if (cfg.blockedAuthors.some((s) => s && norm(a.author) === norm(s))) continue;
         const g = await goldstars(a.profile);
@@ -159,6 +184,7 @@
  <label>Max. gleichzeitig offen</label><input type="number" id="cac-max" min="1">
  <label>Gesperrte Schulen (pro Zeile)</label><textarea id="cac-schools"></textarea>
  <label>Gesperrte Autor:innen (pro Zeile)</label><textarea id="cac-authors"></textarea>
+ <label>Gesperrte Honorar-Titel (pro Zeile)</label><textarea id="cac-titles"></textarea>
  <label><input type="checkbox" id="cac-100"> Bei 100 automatisch stoppen</label>
  <button class="go" id="cac-save" style="background:#8e445f;margin-top:6px">Speichern</button>
 </details>
@@ -191,6 +217,7 @@
   function fill() {
     $('cac-gold').value = cfg.maxGoldstars; $('cac-max').value = cfg.maxOpen;
     $('cac-vers').value = cfg.allowedVersions.join(', ');
+    $('cac-titles').value = cfg.blockedHonorarTitles.join('\n');
     $('cac-schools').value = cfg.blockedSchools.join('\n'); $('cac-authors').value = cfg.blockedAuthors.join('\n');
     $('cac-100').checked = cfg.stopAt100;
   }
@@ -199,6 +226,8 @@
   $('cac-hide').onclick = () => (box.style.display = 'none');
   $('cac-save').onclick = () => {
     cfg = {
+      v: DEF.v,
+      blockedHonorarTitles: lines($('cac-titles').value),
       maxGoldstars: Math.max(0, parseInt($('cac-gold').value, 10) || 0),
       maxOpen: Math.max(1, parseInt($('cac-max').value, 10) || 1),
       allowedVersions: ($('cac-vers').value.match(/\d+/g) || []).map(Number),

@@ -5,7 +5,7 @@ und sie claimt (= Bearbeiten-Seite öffnen).
 
 **Installieren:** GitHub-Pages-Seite dieses Repos öffnen und den Button in die Lesezeichenleiste ziehen.
 
-Regeln: kein Schloss · nur Version 1 und 3 · 0 Goldsterne (Profil-Check) · keine Schulkollegen (Standard: HTL Spengergasse) ·
+Regeln: kein Schloss · nur Version 1, 3 und 5 · keine gesperrten IKB-Honorartexte · 0 Goldsterne (Profil-Check) · keine Schulkollegen (Standard: HTL Spengergasse) ·
 max. 1 offen · Monatszähler mit Hinweis bei 100.
 
 - `bot.js` – der Bot
