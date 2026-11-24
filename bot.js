@@ -75,18 +75,33 @@
     }).filter((x) => x.edit && !x.locked && x.status === 'Ausstehend');
   }
 
-  async function goldstars(profile) {
-    if (!profile) return null;
+  // Goldsterne ändern sich selten → Cache 6 h, auch über Neuladen hinweg
+  const GOLD_KEY = 'cacBotGold', GOLD_TTL = 6 * 3600 * 1000;
+  try {
+    const saved = JSON.parse(localStorage.getItem(GOLD_KEY) || '{}');
+    for (const [k, x] of Object.entries(saved)) if (Date.now() - x.t < GOLD_TTL) goldCache.set(k, x);
+  } catch (_) {}
+  const pending = new Map(); // laufende Profil-Abfragen, damit nichts doppelt geladen wird
+
+  function goldstars(profile) {
+    if (!profile) return Promise.resolve(null);
     const hit = goldCache.get(profile);
-    if (hit && Date.now() - hit.t < 600000) return hit.v;
-    try {
-      const doc = new DOMParser().parseFromString(await fetch(profile, { credentials: 'include' }).then((r) => r.text()), 'text/html');
-      if (!doc.querySelector('[title="Sterne"]')) return null;
-      const el = doc.querySelector('[title="Goldsterne"] span');
-      const v = el ? parseInt(el.textContent.trim(), 10) || 0 : 0;
-      goldCache.set(profile, { v, t: Date.now() });
-      return v;
-    } catch (_) { return null; }
+    if (hit && Date.now() - hit.t < GOLD_TTL) return Promise.resolve(hit.v);
+    if (pending.has(profile)) return pending.get(profile);
+    const p = (async () => {
+      try {
+        const doc = new DOMParser().parseFromString(await fetch(profile, { credentials: 'include' }).then((r) => r.text()), 'text/html');
+        if (!doc.querySelector('[title="Sterne"]')) return null;
+        const el = doc.querySelector('[title="Goldsterne"] span');
+        const v = el ? parseInt(el.textContent.trim(), 10) || 0 : 0;
+        goldCache.set(profile, { v, t: Date.now() });
+        save(GOLD_KEY, Object.fromEntries(goldCache));
+        return v;
+      } catch (_) { return null; }
+      finally { pending.delete(profile); }
+    })();
+    pending.set(profile, p);
+    return p;
   }
 
   // ---------- Claimen ----------
@@ -128,20 +143,27 @@
       for (let i = open.length - 1; i >= 0; i--) if (open[i].win && open[i].win.closed) open.splice(i, 1);
 
       const d = component();
-      if (d && typeof d.fetchRecords === 'function') await d.fetchRecords();
+      if (d && typeof d.fetchRecords === 'function') {
+        await d.fetchRecords();
+        // Tabelle erst lesen, wenn Alpine sie neu gezeichnet hat
+        if (window.Alpine && typeof window.Alpine.nextTick === 'function') await new Promise((r) => window.Alpine.nextTick(r));
+      }
       setStatus(`Läuft · letzte Prüfung ${new Date().toLocaleTimeString('de-AT')}`);
 
-      for (const a of rows()) {
+      // Erst alle lokalen Regeln (kostet nichts), dann Profile parallel statt nacheinander prüfen
+      const cands = rows().filter((a) =>
+        !st.claimed.includes(a.edit) &&
+        cfg.allowedVersions.includes(a.version) &&
+        !(norm(a.type) === 'honorar' && cfg.blockedHonorarTitles.some((t) => t && norm(a.title).includes(norm(t)))) &&
+        !cfg.blockedSchools.some((s) => s && norm(a.school).includes(norm(s))) &&
+        !cfg.blockedAuthors.some((s) => s && norm(a.author) === norm(s)));
+      const golds = await Promise.all(cands.map((a) => goldstars(a.profile)));
+
+      for (let i = 0; i < cands.length; i++) {
         if (!running || open.length >= cfg.maxOpen) break;
         if (cfg.stopAt100 && st.count >= 100) break;
-        if (st.claimed.includes(a.edit)) continue;
-        if (!cfg.allowedVersions.includes(a.version)) continue;
-        if (norm(a.type) === 'honorar' && cfg.blockedHonorarTitles.some((t) => t && norm(a.title).includes(norm(t)))) continue;
-        if (cfg.blockedSchools.some((s) => s && norm(a.school).includes(norm(s)))) continue;
-        if (cfg.blockedAuthors.some((s) => s && norm(a.author) === norm(s))) continue;
-        const g = await goldstars(a.profile);
-        if (g === null || g > cfg.maxGoldstars) continue;
-        await claim(a);
+        if (golds[i] === null || golds[i] > cfg.maxGoldstars) continue;
+        await claim(cands[i]);
       }
       render();
     } catch (e) {
@@ -151,8 +173,23 @@
     }
   }
 
-  function start() { running = true; timer = setInterval(tick, 1000); tick(); render(); }
-  function stop() { running = false; clearInterval(timer); setStatus('Gestoppt'); render(); }
+  // Takt über einen Web Worker: wird in Hintergrund-Tabs nicht auf 1×/Minute gedrosselt wie setInterval
+  let worker = null;
+  function startTicker() {
+    const fallback = () => { if (worker) { worker.terminate(); worker = null; } if (!timer) timer = setInterval(tick, 1000); };
+    try {
+      const url = URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 1000);'], { type: 'text/javascript' }));
+      worker = new Worker(url);
+      worker.onmessage = tick;
+      worker.onerror = fallback; // z. B. wenn die Seite Worker per CSP verbietet
+    } catch (_) { fallback(); }
+  }
+  function stopTicker() {
+    if (worker) { worker.terminate(); worker = null; }
+    clearInterval(timer); timer = null;
+  }
+  function start() { running = true; startTicker(); tick(); render(); }
+  function stop() { running = false; stopTicker(); setStatus('Gestoppt'); render(); }
 
   // ---------- Panel ----------
   const box = document.createElement('div');
