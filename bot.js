@@ -1,5 +1,5 @@
 /* campus a college Claim-Bot – Bookmarklet-Version.
-   Läuft direkt im Tab der Artikelverwaltung, prüft jede Sekunde auf neue Texte. */
+   Läuft direkt im Tab der Artikelverwaltung, prüft alle 500 ms (einstellbar) auf neue Texte. */
 (() => {
   const HOST = 'www.campus-a-college.at';
   if (window.__cacBot) { window.__cacBot.toggle(); return; }
@@ -24,8 +24,10 @@
       'IKB fragt dich: Ein Tag ohne Strom – und dann?',
       'IKB fragt dich: Wie viel Wasserkraft braucht die Energiewende?',
     ],
-    maxOpen: 1, stopAt100: false,
+    maxOpen: 1, stopAt100: false, intervalMs: 500,
   };
+  const MIN_INTERVAL = 250;
+  const interval = () => Math.max(MIN_INTERVAL, parseInt(cfg.intervalMs, 10) || DEF.intervalMs);
   const load = (k, d) => { try { return Object.assign({}, d, JSON.parse(localStorage.getItem(k) || '{}')); } catch (_) { return { ...d }; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
   const month = () => new Date().toISOString().slice(0, 7);
@@ -176,9 +178,10 @@
   // Takt über einen Web Worker: wird in Hintergrund-Tabs nicht auf 1×/Minute gedrosselt wie setInterval
   let worker = null;
   function startTicker() {
-    const fallback = () => { if (worker) { worker.terminate(); worker = null; } if (!timer) timer = setInterval(tick, 1000); };
+    const ms = interval();
+    const fallback = () => { if (worker) { worker.terminate(); worker = null; } if (!timer) timer = setInterval(tick, ms); };
     try {
-      const url = URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 1000);'], { type: 'text/javascript' }));
+      const url = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${ms});`], { type: 'text/javascript' }));
       worker = new Worker(url);
       worker.onmessage = tick;
       worker.onerror = fallback; // z. B. wenn die Seite Worker per CSP verbietet
@@ -218,6 +221,7 @@
 <details><summary>Einstellungen</summary>
  <label>Max. Goldsterne der Autor:in</label><input type="number" id="cac-gold" min="0">
  <label>Erlaubte Versionen (z. B. 1, 3)</label><input type="text" id="cac-vers">
+ <label>Prüf-Intervall in ms (min. 250)</label><input type="number" id="cac-int" min="250" step="50">
  <label>Max. gleichzeitig offen</label><input type="number" id="cac-max" min="1">
  <label>Gesperrte Schulen (pro Zeile)</label><textarea id="cac-schools"></textarea>
  <label>Gesperrte Autor:innen (pro Zeile)</label><textarea id="cac-authors"></textarea>
@@ -254,6 +258,7 @@
   function fill() {
     $('cac-gold').value = cfg.maxGoldstars; $('cac-max').value = cfg.maxOpen;
     $('cac-vers').value = cfg.allowedVersions.join(', ');
+    $('cac-int').value = interval();
     $('cac-titles').value = cfg.blockedHonorarTitles.join('\n');
     $('cac-schools').value = cfg.blockedSchools.join('\n'); $('cac-authors').value = cfg.blockedAuthors.join('\n');
     $('cac-100').checked = cfg.stopAt100;
@@ -264,6 +269,7 @@
   $('cac-save').onclick = () => {
     cfg = {
       v: DEF.v,
+      intervalMs: Math.max(MIN_INTERVAL, parseInt($('cac-int').value, 10) || DEF.intervalMs),
       blockedHonorarTitles: lines($('cac-titles').value),
       maxGoldstars: Math.max(0, parseInt($('cac-gold').value, 10) || 0),
       maxOpen: Math.max(1, parseInt($('cac-max').value, 10) || 1),
@@ -272,7 +278,8 @@
       blockedAuthors: lines($('cac-authors').value),
       stopAt100: $('cac-100').checked,
     };
-    save(CFG_KEY, cfg); log('Einstellungen gespeichert');
+    save(CFG_KEY, cfg); fill(); log('Einstellungen gespeichert');
+    if (running) { stopTicker(); startTicker(); } // neues Intervall sofort übernehmen
   };
 
   window.__cacBot = { toggle: () => (box.style.display = box.style.display === 'none' ? '' : 'none') };

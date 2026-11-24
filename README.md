@@ -1,6 +1,6 @@
 # campus a college Claim-Bot
 
-Bookmarklet, das in der Artikelverwaltung von campus a college jede Sekunde nach neuen ausstehenden Texten sucht
+Bookmarklet, das in der Artikelverwaltung von campus a college alle 500 ms (einstellbar, min. 250 ms) nach neuen ausstehenden Texten sucht
 und sie claimt (= Bearbeiten-Seite öffnen).
 
 **Installieren:** GitHub-Pages-Seite dieses Repos öffnen und den Button in die Lesezeichenleiste ziehen.
